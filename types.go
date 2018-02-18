@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+// Hash is the hash of an object
+type Hash []byte
+
 // GenericObjectCollection is a collection of GenericObjects
 type GenericObjectCollection []*GenericObject
 
@@ -15,26 +18,17 @@ type GenericObject struct {
 	Value    string
 }
 
-// SerializedObjectCollection is a collection of serialized objects
-type SerializedObjectCollection []*SerializedObject
+// TreeObjectCollection is a collection of tree objects
+type TreeObjectCollection []*TreeObject
 
-// SerializedObject is a pairing of data and a hash
-type SerializedObject struct {
-	Hash []byte
-	Data []byte
+// TreeObject is a pairing of data and a hash
+type TreeObject struct {
+	ID   string
+	Hash Hash
 }
 
-// GetData will return the data slice of the SerializedObjectCollection
-func (c SerializedObjectCollection) GetData() [][]byte {
-	data := make([][]byte, len(c))
-	for i := 0; i < len(c); i++ {
-		data[i] = c[i].Data
-	}
-	return data
-}
-
-// GetHashes will return the hash slice of the SerializedObjectCollection
-func (c SerializedObjectCollection) GetHashes() [][]byte {
+// GetHashes will return the hash slice of the TreeObjectCollection
+func (c TreeObjectCollection) GetHashes() [][]byte {
 	hashes := make([][]byte, len(c))
 	for i := 0; i < len(c); i++ {
 		hashes[i] = c[i].Hash
@@ -42,10 +36,20 @@ func (c SerializedObjectCollection) GetHashes() [][]byte {
 	return hashes
 }
 
-type serializedObjectSorter []*SerializedObject
+// GetIDs will return the IDs of the TreeObjectCollection
+func (c TreeObjectCollection) GetIDs() [][]byte {
+	ids := make([][]byte, len(c))
+	for i := 0; i < len(c); i++ {
+		ids[i] = []byte(c[i].ID)
+	}
+	return ids
+}
 
-func (b serializedObjectSorter) Len() int { return len(b) }
-func (b serializedObjectSorter) Less(i, j int) bool {
+// treeObjectSorted will sort objects based on their Hash
+type treeObjectSorter []*TreeObject
+
+func (b treeObjectSorter) Len() int { return len(b) }
+func (b treeObjectSorter) Less(i, j int) bool {
 	switch bytes.Compare(b[i].Hash, b[j].Hash) {
 	case -1:
 		return true
@@ -55,4 +59,4 @@ func (b serializedObjectSorter) Less(i, j int) bool {
 		return false
 	}
 }
-func (b serializedObjectSorter) Swap(i, j int) { b[j], b[i] = b[i], b[j] }
+func (b treeObjectSorter) Swap(i, j int) { b[j], b[i] = b[i], b[j] }

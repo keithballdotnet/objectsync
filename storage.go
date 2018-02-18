@@ -1,0 +1,71 @@
+package objectsync
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"errors"
+)
+
+// Storage is a storage interface
+type Storage interface {
+	Set(ctx context.Context, object *GenericObject) error
+	Get(ctx context.Context, id string) (*GenericObject, Hash, error)
+	GetAll(ctx context.Context) (GenericObjectCollection, error)
+	GetHashes(ctx context.Context) (map[string]Hash, error)
+}
+
+// InMemoryStorage ...
+type InMemoryStorage struct {
+	idIndex   map[string]*GenericObject
+	hashIndex map[string]Hash
+}
+
+// NewInMemoryStorage ...
+func NewInMemoryStorage() *InMemoryStorage {
+	idIndex := make(map[string]*GenericObject)
+	hashIndex := make(map[string]Hash)
+	return &InMemoryStorage{idIndex: idIndex, hashIndex: hashIndex}
+}
+
+// Set ...
+func (s *InMemoryStorage) Set(ctx context.Context, object *GenericObject) error {
+	s.idIndex[object.ID] = object
+
+	// TODO: We should find a better serialization tool
+	jsonData, err := json.Marshal(object)
+	if err != nil {
+		return err
+	}
+
+	hash := sha256.Sum256(jsonData)
+	s.hashIndex[object.ID] = Hash(hash[:])
+	return nil
+}
+
+// Get ...
+func (s *InMemoryStorage) Get(ctx context.Context, id string) (*GenericObject, Hash, error) {
+	object, ok := s.idIndex[id]
+	if !ok {
+		return nil, nil, errors.New("not found")
+	}
+
+	return object, s.hashIndex[id], nil
+}
+
+// GetAll will return all objects
+func (s *InMemoryStorage) GetAll(ctx context.Context) (GenericObjectCollection, error) {
+	objects := make([]*GenericObject, len(s.idIndex))
+	i := 0
+	for _, object := range s.idIndex {
+		objects[i] = object
+		i++
+	}
+
+	return GenericObjectCollection(objects), nil
+}
+
+// GetHashes will return all the hashes of items
+func (s *InMemoryStorage) GetHashes(ctx context.Context) (map[string]Hash, error) {
+	return s.hashIndex, nil
+}
