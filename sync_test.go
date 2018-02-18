@@ -14,34 +14,51 @@ func TestTree(t *testing.T) {
 
 	ctx := context.TODO()
 
-	t.Run("SimpleAppend", func(t *testing.T) {
-		var store Storage
-		store = NewInMemoryStorage()
+	t.Run("NoChange", func(t *testing.T) {
+
+		store := NewInMemoryStorage()
 
 		err := AddObjectsToStore(ctx, store, 4)
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
 
-		hashes, err := store.GetHashes(ctx)
+		store2, err := Copy(store)
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
 
-		objects, err := GetTreeObjects(ctx, hashes)
+		err = Sync(ctx, store, store2)
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
-
-		tree, err := CreateMerkleTree(ctx, objects)
-		if err != nil {
-			t.Errorf("Error: %v", err)
-		}
-
-		fmt.Printf("Tree: %s", tree.ToString(ctx))
 
 	})
+	t.Run("SimpleAppend", func(t *testing.T) {
 
+		store := NewInMemoryStorage()
+
+		err := AddObjectsToStore(ctx, store, 4)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		store2, err := Copy(store)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		err = AddObjectsToStore(ctx, store2, 1)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		err = Sync(ctx, store, store2)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+	})
 }
 
 func AddObjectsToStore(ctx context.Context, store Storage, len int) error {
@@ -57,4 +74,19 @@ func AddObjectsToStore(ctx context.Context, store Storage, len int) error {
 		}
 	}
 	return nil
+}
+
+func Copy(s *InMemoryStorage) (*InMemoryStorage, error) {
+	store := NewInMemoryStorage()
+	objects, err := s.GetAll(nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, object := range objects {
+		err := store.Set(nil, &(*object))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return store, nil
 }
