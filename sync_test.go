@@ -59,6 +59,14 @@ func TestTree(t *testing.T) {
 			t.Errorf("Error: %v", err)
 		}
 
+		allFromStore, err := store.GetAll(ctx)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+		if len(allFromStore) != 11 {
+			t.Errorf("Incorrect len = %v, want %v", len(allFromStore), 11)
+		}
+
 	})
 }
 

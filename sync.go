@@ -30,6 +30,62 @@ func Sync(ctx context.Context, local, remote Storage) error {
 		return nil
 	}
 
+	// Old school merge via differential
+
+	fmt.Printf("Tree Depth: local: %v remote: %v\n", localTree.Depth, remoteTree.Depth)
+
+	localLeaves := localTree.Layers[localTree.Depth-1]
+	remoteLeaves := remoteTree.Layers[remoteTree.Depth-1]
+
+	fmt.Printf("Tree Leaves: local: %v remote: %v\n", len(localLeaves), len(remoteLeaves))
+
+	// add := []*Node{}
+	// delete := []*Node{}
+	// modify := []*Node{}
+
+	// First merge local -> remote
+	for _, localLeaf := range localLeaves {
+		foundLeaf := false
+		for _, remoteLeaf := range remoteLeaves {
+			if bytes.Equal(remoteLeaf.Hash, localLeaf.Hash) {
+				foundLeaf = true
+			}
+		}
+		// Add leaf to remote leaves
+		if !foundLeaf {
+			data, _, err := local.Get(ctx, string(localLeaf.ExtraData))
+			if err != nil {
+				return err
+			}
+			err = remote.Set(ctx, data)
+			if err != nil {
+				return err
+			}
+			// TODO:  Add leaf to localLeaves
+		}
+	}
+
+	// Second pass remote -> local
+	for _, remoteLeaf := range remoteLeaves {
+		foundLeaf := false
+		for _, localLeaf := range localLeaves {
+			if bytes.Equal(remoteLeaf.Hash, localLeaf.Hash) {
+				foundLeaf = true
+			}
+		}
+		// Add leaf to local data
+		if !foundLeaf {
+			data, _, err := remote.Get(ctx, string(remoteLeaf.ExtraData))
+			if err != nil {
+				return err
+			}
+			err = local.Set(ctx, data)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	// Experiments in walking the tree.
 	// Maybe I need to walk the tree at the same time.
 
