@@ -12,6 +12,7 @@ type Storage interface {
 	Set(ctx context.Context, object *GenericObject) error
 	Get(ctx context.Context, id string) (*GenericObject, Hash, error)
 	GetAll(ctx context.Context) (GenericObjectCollection, error)
+	Delete(ctx context.Context, id string) error
 	GetHashes(ctx context.Context) (map[string]Hash, error)
 }
 
@@ -63,6 +64,13 @@ func (s *InMemoryStorage) GetAll(ctx context.Context) (GenericObjectCollection, 
 	}
 
 	return GenericObjectCollection(objects), nil
+}
+
+// Delete will remove a entry from the storage
+func (s *InMemoryStorage) Delete(ctx context.Context, id string) error {
+	delete(s.hashIndex, id)
+	delete(s.idIndex, id)
+	return nil
 }
 
 // GetHashes will return all the hashes of items

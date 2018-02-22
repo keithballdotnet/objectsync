@@ -39,10 +39,6 @@ func Sync(ctx context.Context, local, remote Storage) error {
 
 	fmt.Printf("Tree Leaves: local: %v remote: %v\n", len(localLeaves), len(remoteLeaves))
 
-	// add := []*Node{}
-	// delete := []*Node{}
-	// modify := []*Node{}
-
 	// First merge local -> remote
 	for _, localLeaf := range localLeaves {
 		foundLeaf := false
@@ -204,7 +200,7 @@ func getTree(ctx context.Context, store Storage) (*merkle.Tree, error) {
 		return nil, err
 	}
 
-	fmt.Printf("tree: %v", tree.ToString(ctx))
+	//fmt.Printf("tree: %v", tree.ToString(ctx))
 
 	return tree, nil
 }

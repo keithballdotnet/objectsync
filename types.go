@@ -48,15 +48,6 @@ func (c TreeObjectCollection) GetIDs() [][]byte {
 // treeObjectSorted will sort objects based on their Hash
 type treeObjectSorter []*TreeObject
 
-func (b treeObjectSorter) Len() int { return len(b) }
-func (b treeObjectSorter) Less(i, j int) bool {
-	switch bytes.Compare(b[i].Hash, b[j].Hash) {
-	case -1:
-		return true
-	case 0, 1:
-		return false
-	default:
-		return false
-	}
-}
-func (b treeObjectSorter) Swap(i, j int) { b[j], b[i] = b[i], b[j] }
+func (b treeObjectSorter) Len() int           { return len(b) }
+func (b treeObjectSorter) Less(i, j int) bool { return bytes.Compare(b[i].Hash, b[j].Hash) < 0 }
+func (b treeObjectSorter) Swap(i, j int)      { b[j], b[i] = b[i], b[j] }

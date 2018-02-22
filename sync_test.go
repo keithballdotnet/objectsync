@@ -15,7 +15,6 @@ func TestTree(t *testing.T) {
 	ctx := context.TODO()
 
 	t.Run("NoChange", func(t *testing.T) {
-		t.SkipNow()
 
 		store := NewInMemoryStorage()
 
@@ -33,6 +32,9 @@ func TestTree(t *testing.T) {
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
+
+		checkStore(ctx, store, 4, t)
+		checkStore(ctx, store2, 4, t)
 
 	})
 	t.Run("SimpleAppend", func(t *testing.T) {
@@ -59,15 +61,57 @@ func TestTree(t *testing.T) {
 			t.Errorf("Error: %v", err)
 		}
 
-		allFromStore, err := store.GetAll(ctx)
+		checkStore(ctx, store, 11, t)
+		checkStore(ctx, store2, 11, t)
+
+	})
+	t.Run("SimpleRemove", func(t *testing.T) {
+
+		store := NewInMemoryStorage()
+
+		err := AddObjectsToStore(ctx, store, 10)
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
-		if len(allFromStore) != 11 {
-			t.Errorf("Incorrect len = %v, want %v", len(allFromStore), 11)
+
+		all, err := store.GetAll(ctx)
+		if err != nil {
+			t.Errorf("Error: %v", err)
 		}
 
+		store2, err := Copy(store)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		err = store2.Delete(ctx, all[0].ID)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		err = AddObjectsToStore(ctx, store2, 1)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		err = Sync(ctx, store, store2)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		checkStore(ctx, store, 9, t)
+		checkStore(ctx, store2, 9, t)
 	})
+}
+
+func checkStore(ctx context.Context, store Storage, expectedLen int, t *testing.T) {
+	allFromStore, err := store.GetAll(ctx)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	if len(allFromStore) != expectedLen {
+		t.Errorf("Incorrect len = %v, want %v", len(allFromStore), expectedLen)
+	}
 }
 
 func AddObjectsToStore(ctx context.Context, store Storage, len int) error {
