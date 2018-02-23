@@ -18,6 +18,33 @@ type GenericObject struct {
 	Value    string
 }
 
+// SyncStatus is a status of the last sync for items
+type SyncStatus struct {
+	ID     string
+	Local  Hash
+	Remote Hash
+}
+
+// ChangeType represents what change should be performed
+type ChangeType string
+
+// Types of changes that can be done during a sync
+const (
+	ChangeTypeAdd          ChangeType = "add"
+	ChangeTypeDelete       ChangeType = "delete"
+	ChangeTypeUpdate       ChangeType = "update"
+	ChangeTypeDeleteStatus ChangeType = "delete_status"
+	ChangeTypeAddStatus    ChangeType = "add_status"
+)
+
+// Change is a change
+type Change struct {
+	Type   ChangeType
+	ID     string
+	Object *GenericObject
+	Store  Storage
+}
+
 // TreeObjectCollection is a collection of tree objects
 type TreeObjectCollection []*TreeObject
 

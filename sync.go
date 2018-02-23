@@ -1,20 +1,215 @@
 package objectsync
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
-	"sort"
-
-	"github.com/keithballdotnet/merkle"
 )
 
 // Sync will sync together two Storages
+// Based off - https://unterwaditzer.net/2016/sync-algorithm.html
 // Last Write Wins (LWW) conflict resolution
-func Sync(ctx context.Context, local, remote Storage) error {
+func Sync(ctx context.Context, local, remote Storage, status StatusStorage) error {
 
-	localTree, err := getTree(ctx, local)
+	localSet, _, err := local.GetAll(ctx)
+	if err != nil {
+		return err
+	}
+
+	remoteSet, _, err := remote.GetAll(ctx)
+	if err != nil {
+		return err
+	}
+
+	foundIDs := []string{}
+
+	changes := []*Change{}
+
+	/* Phase 1 - Discover changes */
+
+	for _, localObject := range localSet {
+		// Keep a note of this foundIDs to check against the status set
+		foundIDs = append(foundIDs, localObject.ID)
+
+		_, _, err = remote.Get(ctx, localObject.ID)
+		foundRemote := wasFound(err)
+
+		_, err = status.Get(ctx, localObject.ID)
+		foundStatus := wasFound(err)
+
+		// A - B - status
+		if !foundRemote && !foundStatus {
+			fmt.Printf("We should add local [%s] to remote\n", localObject.ID)
+			// Add local -> Remote
+			// Store Status
+			changes = append(changes, &Change{Type: ChangeTypeAdd, Object: localObject, Store: remote})
+		}
+
+		// A + status - B
+		if !foundRemote && foundStatus {
+			fmt.Printf("We should delete local [%s]\n", localObject.ID)
+			// Delete local
+			// Delete status
+			changes = append(changes, &Change{Type: ChangeTypeDelete, Object: localObject, Store: local})
+		}
+
+		// A + B - status
+		if foundRemote && !foundStatus {
+			fmt.Printf("Found in both sets, but missing status.  Add status\n")
+			// store status
+		}
+
+	}
+
+	for _, remoteObject := range remoteSet {
+		// Keep a note of this foundIDs to check against the status set
+		foundIDs = append(foundIDs, remoteObject.ID)
+
+		_, _, err = local.Get(ctx, remoteObject.ID)
+		foundLocal := wasFound(err)
+		_, err = status.Get(ctx, remoteObject.ID)
+		foundStatus := wasFound(err)
+
+		// B - A - status
+		if !foundLocal && !foundStatus {
+			fmt.Printf("We should add remote [%s] to local\n", remoteObject.ID)
+			// Add remote -> local
+			// store status
+			changes = append(changes, &Change{Type: ChangeTypeAdd, Object: remoteObject, Store: local})
+		}
+
+		// B + status - A
+		if !foundLocal && foundStatus {
+			fmt.Printf("We should remove remote [%s]\n", remoteObject.ID)
+			// Delete remote
+			// Delete status
+			changes = append(changes, &Change{Type: ChangeTypeDelete, Object: remoteObject, Store: remote})
+		}
+	}
+
+	// Find dead status
+	allStati, err := status.GetAll(ctx)
+	if err != nil {
+		return err
+	}
+	for _, status := range allStati {
+		statusFound := false
+		for _, id := range foundIDs {
+			if status.ID == id {
+				// Found this status in the list of relevant IDs.
+				// Jump to next
+				statusFound = true
+				continue
+			}
+		}
+		if statusFound {
+			continue
+		}
+
+		// status - A - B
+		fmt.Printf("We should remove status [%s]\n", status.ID)
+	}
+
+	/* Phase 2 - Reconcile changes */
+	for _, change := range changes {
+		fmt.Printf("Got change: %v\n", change.Type)
+
+		switch change.Type {
+		case ChangeTypeAdd:
+			// Add object to store
+			err = change.Store.Set(ctx, change.Object)
+			if err != nil {
+				return err
+			}
+			// Set status
+			err = status.Set(ctx, &SyncStatus{ID: change.Object.ID})
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("Added: %v To: %s\n", change.Object.ID, change.Store.GetName())
+		case ChangeTypeDelete:
+			err = change.Store.Delete(ctx, change.Object.ID)
+			if err != nil {
+				return err
+			}
+			// Delete status
+			err = status.Delete(ctx, change.Object.ID)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("Deleted: %v From: %s\n", change.Object.ID, change.Store.GetName())
+		default:
+			fmt.Println("Currently unsupported change type")
+		}
+
+	}
+
+	return nil
+}
+
+func wasFound(err error) bool {
+	return err == nil || err.Error() != "not found"
+}
+
+/* Old experiments
+
+func getTree(ctx context.Context, store Storage) (*merkle.Tree, error) {
+	hashes, err := store.GetHashes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	objects, err := getTreeObjects(ctx, hashes)
+	if err != nil {
+		return nil, err
+	}
+
+	tree, err := createMerkleTree(ctx, objects)
+	if err != nil {
+		return nil, err
+	}
+
+	//fmt.Printf("tree: %v", tree.ToString(ctx))
+
+	return tree, nil
+}
+
+
+// getTreeObjects will return a sorted serialized object collection
+func getTreeObjects(ctx context.Context, hashes map[string]Hash) (TreeObjectCollection, error) {
+
+	objects := make([]*TreeObject, len(hashes))
+	i := 0
+	for id, hash := range hashes {
+		// Create tree object
+		objects[i] = &TreeObject{ID: id, Hash: hash}
+		i++
+	}
+
+	// Sort collection
+	sort.Sort(treeObjectSorter(objects))
+
+	return TreeObjectCollection(objects), nil
+}
+
+// createMerkleTree will return a merkle tree for a collection of serialized objects
+func createMerkleTree(ctx context.Context, objects TreeObjectCollection) (*merkle.Tree, error) {
+	// create a new Sha256 powered MerkleTree
+	tree := merkle.NewTree(&merkle.Sha256Hasher{})
+	// We will add the hashes to the tree, not the actual data.
+	// Add the IDs as extra data so we have an ID in the tree
+	// we can use to identify the leaves from the tree
+	tree.AddContent(ctx, objects.GetHashes(), objects.GetIDs())
+	// Build the tree
+	tree.Build(ctx)
+
+	return tree, nil
+}
+
+
+
+localTree, err := getTree(ctx, local)
 	if err != nil {
 		return err
 	}
@@ -181,57 +376,4 @@ func Sync(ctx context.Context, local, remote Storage) error {
 	// 	}
 	//}
 
-	return nil
-}
-
-func getTree(ctx context.Context, store Storage) (*merkle.Tree, error) {
-	hashes, err := store.GetHashes(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	objects, err := getTreeObjects(ctx, hashes)
-	if err != nil {
-		return nil, err
-	}
-
-	tree, err := createMerkleTree(ctx, objects)
-	if err != nil {
-		return nil, err
-	}
-
-	//fmt.Printf("tree: %v", tree.ToString(ctx))
-
-	return tree, nil
-}
-
-// getTreeObjects will return a sorted serialized object collection
-func getTreeObjects(ctx context.Context, hashes map[string]Hash) (TreeObjectCollection, error) {
-
-	objects := make([]*TreeObject, len(hashes))
-	i := 0
-	for id, hash := range hashes {
-		// Create tree object
-		objects[i] = &TreeObject{ID: id, Hash: hash}
-		i++
-	}
-
-	// Sort collection
-	sort.Sort(treeObjectSorter(objects))
-
-	return TreeObjectCollection(objects), nil
-}
-
-// createMerkleTree will return a merkle tree for a collection of serialized objects
-func createMerkleTree(ctx context.Context, objects TreeObjectCollection) (*merkle.Tree, error) {
-	// create a new Sha256 powered MerkleTree
-	tree := merkle.NewTree(&merkle.Sha256Hasher{})
-	// We will add the hashes to the tree, not the actual data.
-	// Add the IDs as extra data so we have an ID in the tree
-	// we can use to identify the leaves from the tree
-	tree.AddContent(ctx, objects.GetHashes(), objects.GetIDs())
-	// Build the tree
-	tree.Build(ctx)
-
-	return tree, nil
-}
+*/

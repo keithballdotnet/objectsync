@@ -14,98 +14,101 @@ func TestTree(t *testing.T) {
 
 	ctx := context.TODO()
 
-	t.Run("NoChange", func(t *testing.T) {
-
-		store := NewInMemoryStorage()
-
-		err := AddObjectsToStore(ctx, store, 4)
-		if err != nil {
-			t.Errorf("Error: %v", err)
-		}
-
-		store2, err := Copy(store)
-		if err != nil {
-			t.Errorf("Error: %v", err)
-		}
-
-		err = Sync(ctx, store, store2)
-		if err != nil {
-			t.Errorf("Error: %v", err)
-		}
-
-		checkStore(ctx, store, 4, t)
-		checkStore(ctx, store2, 4, t)
-
-	})
 	t.Run("SimpleAppend", func(t *testing.T) {
 
-		store := NewInMemoryStorage()
+		// Wipe status
+		status := NewInMemoryStatusStorage()
 
-		err := AddObjectsToStore(ctx, store, 10)
+		itemCount := 3
+
+		// Create first item set
+		store := NewInMemoryStorage("local")
+
+		_, err := AddObjectsToStore(ctx, store, itemCount)
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
 
-		store2, err := Copy(store)
+		fmt.Println("Run sync...")
+
+		// sync items
+		store2 := NewInMemoryStorage("remote")
+		err = Sync(ctx, store, store2, status)
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
 
-		err = AddObjectsToStore(ctx, store2, 1)
+		checkStore(ctx, store, itemCount, t)
+		checkStore(ctx, store2, itemCount, t)
+
+		increment := 2
+
+		_, err = AddObjectsToStore(ctx, store2, increment)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+		checkStore(ctx, store2, itemCount+increment, t)
+
+		fmt.Println("Run sync...")
+
+		err = Sync(ctx, store, store2, status)
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
 
-		err = Sync(ctx, store, store2)
-		if err != nil {
-			t.Errorf("Error: %v", err)
-		}
-
-		checkStore(ctx, store, 11, t)
-		checkStore(ctx, store2, 11, t)
+		checkStore(ctx, store, itemCount+increment, t)
+		checkStore(ctx, store2, itemCount+increment, t)
 
 	})
 	t.Run("SimpleRemove", func(t *testing.T) {
 
-		store := NewInMemoryStorage()
+		// Status
+		status := NewInMemoryStatusStorage()
 
-		err := AddObjectsToStore(ctx, store, 10)
+		itemCount := 3
+
+		// Create first item set
+		store := NewInMemoryStorage("local")
+
+		addedObjects, err := AddObjectsToStore(ctx, store, itemCount)
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
 
-		all, err := store.GetAll(ctx)
+		fmt.Println("Run sync...")
+
+		// sync items
+		store2 := NewInMemoryStorage("remote")
+		err = Sync(ctx, store, store2, status)
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
 
-		store2, err := Copy(store)
+		checkStore(ctx, store, itemCount, t)
+		checkStore(ctx, store2, itemCount, t)
+
+		// Remove some items
+		decrement := 2
+		for i := 0; i < decrement; i++ {
+			store2.Delete(ctx, addedObjects[i].ID)
+		}
+		checkStore(ctx, store2, itemCount-decrement, t)
+
+		fmt.Println("Run sync...")
+
+		err = Sync(ctx, store, store2, status)
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
 
-		err = store2.Delete(ctx, all[0].ID)
-		if err != nil {
-			t.Errorf("Error: %v", err)
-		}
+		checkStore(ctx, store, itemCount-decrement, t)
+		checkStore(ctx, store2, itemCount-decrement, t)
 
-		err = AddObjectsToStore(ctx, store2, 1)
-		if err != nil {
-			t.Errorf("Error: %v", err)
-		}
-
-		err = Sync(ctx, store, store2)
-		if err != nil {
-			t.Errorf("Error: %v", err)
-		}
-
-		checkStore(ctx, store, 9, t)
-		checkStore(ctx, store2, 9, t)
 	})
 }
 
 func checkStore(ctx context.Context, store Storage, expectedLen int, t *testing.T) {
-	allFromStore, err := store.GetAll(ctx)
+	allFromStore, _, err := store.GetAll(ctx)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
@@ -114,32 +117,20 @@ func checkStore(ctx context.Context, store Storage, expectedLen int, t *testing.
 	}
 }
 
-func AddObjectsToStore(ctx context.Context, store Storage, len int) error {
+func AddObjectsToStore(ctx context.Context, store Storage, len int) ([]*GenericObject, error) {
+	addedObects := make([]*GenericObject, len)
 	for i := 0; i < len; i++ {
 		now := time.Now().UTC()
-		err := store.Set(ctx, &GenericObject{
+		o := &GenericObject{
 			ID:       fmt.Sprintf("%v", now.UnixNano()),
 			Modified: now,
 			Value:    fmt.Sprintf("Object%v", i),
-		})
-		if err != nil {
-			return err
 		}
-	}
-	return nil
-}
-
-func Copy(s *InMemoryStorage) (*InMemoryStorage, error) {
-	store := NewInMemoryStorage()
-	objects, err := s.GetAll(nil)
-	if err != nil {
-		return nil, err
-	}
-	for _, object := range objects {
-		err := store.Set(nil, &(*object))
+		addedObects[i] = o
+		err := store.Set(ctx, o)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return store, nil
+	return addedObects, nil
 }

@@ -9,24 +9,31 @@ import (
 
 // Storage is a storage interface
 type Storage interface {
+	GetName() string
 	Set(ctx context.Context, object *GenericObject) error
 	Get(ctx context.Context, id string) (*GenericObject, Hash, error)
-	GetAll(ctx context.Context) (GenericObjectCollection, error)
+	GetAll(ctx context.Context) (GenericObjectCollection, map[string]Hash, error)
 	Delete(ctx context.Context, id string) error
 	GetHashes(ctx context.Context) (map[string]Hash, error)
 }
 
 // InMemoryStorage ...
 type InMemoryStorage struct {
+	name      string
 	idIndex   map[string]*GenericObject
 	hashIndex map[string]Hash
 }
 
 // NewInMemoryStorage ...
-func NewInMemoryStorage() *InMemoryStorage {
+func NewInMemoryStorage(name string) *InMemoryStorage {
 	idIndex := make(map[string]*GenericObject)
 	hashIndex := make(map[string]Hash)
-	return &InMemoryStorage{idIndex: idIndex, hashIndex: hashIndex}
+	return &InMemoryStorage{name: name, idIndex: idIndex, hashIndex: hashIndex}
+}
+
+// GetName ...
+func (s *InMemoryStorage) GetName() string {
+	return s.name
 }
 
 // Set ...
@@ -55,7 +62,7 @@ func (s *InMemoryStorage) Get(ctx context.Context, id string) (*GenericObject, H
 }
 
 // GetAll will return all objects
-func (s *InMemoryStorage) GetAll(ctx context.Context) (GenericObjectCollection, error) {
+func (s *InMemoryStorage) GetAll(ctx context.Context) (GenericObjectCollection, map[string]Hash, error) {
 	objects := make([]*GenericObject, len(s.idIndex))
 	i := 0
 	for _, object := range s.idIndex {
@@ -63,7 +70,7 @@ func (s *InMemoryStorage) GetAll(ctx context.Context) (GenericObjectCollection, 
 		i++
 	}
 
-	return GenericObjectCollection(objects), nil
+	return GenericObjectCollection(objects), s.hashIndex, nil
 }
 
 // Delete will remove a entry from the storage
