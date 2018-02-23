@@ -103,11 +103,61 @@ func TestTree(t *testing.T) {
 		checkStore(ctx, store2, itemCount-decrement, nil, t)
 
 	})
+	// t.Run("ComplexSync", func(t *testing.T) {
+
+	// 	status := NewInMemoryStatusStorage()
+
+	// 	itemCount := 3
+
+	// 	// Create first item set
+	// 	store1 := NewInMemoryStorage("local")
+
+	// 	expectedStore1Objects := []*GenericObject{}
+	// 	expectedStore2Objects := []*GenericObject{}
+
+	// 	addedObjects, err := addObjectsToStore(ctx, store1, itemCount)
+	// 	if err != nil {
+	// 		t.Errorf("Error: %v", err)
+	// 	}
+	// 	expectedStore1Objects = append(expectedStore1Objects, addedObjects...)
+	// 	expectedStore2Objects = append(expectedStore2Objects, addedObjects...)
+
+	// 	fmt.Println("Run sync...")
+
+	// 	// sync items
+	// 	store2 := NewInMemoryStorage("remote")
+	// 	err = Sync(ctx, store1, store2, status)
+	// 	if err != nil {
+	// 		t.Errorf("Error: %v", err)
+	// 	}
+
+	// 	checkStore(ctx, store1, itemCount, expectedStore1Objects, t)
+	// 	checkStore(ctx, store2, itemCount, expectedStore2Objects, t)
+
+	// 	// Remove some items
+	// 	decrement := 2
+	// 	for i := 0; i < decrement; i++ {
+	// 		store2.Delete(ctx, addedObjects[i].ID)
+
+	// 	}
+	// 	checkStore(ctx, store2, itemCount-decrement, nil, t)
+
+	// 	fmt.Println("Run sync...")
+
+	// 	err = Sync(ctx, store1, store2, status)
+	// 	if err != nil {
+	// 		t.Errorf("Error: %v", err)
+	// 	}
+
+	// 	checkStore(ctx, store1, itemCount-decrement, nil, t)
+	// 	checkStore(ctx, store2, itemCount-decrement, nil, t)
+
+	// })
 	t.Run("DualAppend", func(t *testing.T) {
 
 		status := NewInMemoryStatusStorage()
 
-		itemCount := 2
+		itemCount := 5
 
 		// Create first item set
 		store1 := NewInMemoryStorage("local")
@@ -122,10 +172,10 @@ func TestTree(t *testing.T) {
 		expectedStore1Objects = append(expectedStore1Objects, addedObjects...)
 		expectedStore2Objects = append(expectedStore2Objects, addedObjects...)
 
-		fmt.Println("Run sync...")
-
 		// sync items
 		store2 := NewInMemoryStorage("remote")
+
+		fmt.Println("Run sync...")
 		err = Sync(ctx, store1, store2, status)
 		if err != nil {
 			t.Errorf("Error: %v", err)
@@ -134,20 +184,19 @@ func TestTree(t *testing.T) {
 		checkStore(ctx, store1, itemCount, expectedStore1Objects, t)
 		checkStore(ctx, store2, itemCount, expectedStore2Objects, t)
 
-		increment := 2
-		addedObjects, err = addObjectsToStore(ctx, store1, increment)
+		increment := 4
+		addedObjectsStore1, err := addObjectsToStore(ctx, store1, increment)
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
-		expectedStore1Objects = append(expectedStore1Objects, addedObjects...)
-		checkStore(ctx, store1, itemCount+increment, expectedStore1Objects, t)
-
-		addedObjects, err = addObjectsToStore(ctx, store2, increment)
+		addedObjectsStore2, err := addObjectsToStore(ctx, store2, increment)
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
-		expectedStore2Objects = append(expectedStore2Objects, addedObjects...)
-		checkStore(ctx, store2, itemCount+increment, expectedStore2Objects, t)
+		expectedStore2Objects = append(expectedStore2Objects, addedObjectsStore1...)
+		expectedStore2Objects = append(expectedStore2Objects, addedObjectsStore2...)
+		expectedStore1Objects = append(expectedStore1Objects, addedObjectsStore1...)
+		expectedStore1Objects = append(expectedStore1Objects, addedObjectsStore2...)
 
 		fmt.Println("Run sync...")
 
@@ -180,7 +229,7 @@ func checkStore(ctx context.Context, store Storage, expectedLen int, expectedObj
 				}
 			}
 			if !found {
-				t.Fatalf("Unexpected not found id = %s", expectedObject.ID)
+				t.Fatalf("Unexpected not found id = %s in %s", expectedObject.ID, store.GetName())
 			}
 		}
 
@@ -192,8 +241,8 @@ func checkStore(ctx context.Context, store Storage, expectedLen int, expectedObj
 					found = true
 				}
 			}
-			if found {
-				t.Fatalf("Unexpected found id = %s", storeObject.ID)
+			if !found {
+				t.Fatalf("Unexpected found id = %s in %s", storeObject.ID, store.GetName())
 			}
 		}
 	}
