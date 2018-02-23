@@ -26,6 +26,7 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 
 	/* Phase 1 - Discover changes */
 
+	// Iterate local
 	for _, localObject := range localSet {
 		// Keep a note of this foundIDs to check against the status set
 		foundIDs = append(foundIDs, localObject.ID)
@@ -56,10 +57,12 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 		if foundRemote && !foundStatus {
 			fmt.Printf("Found in both sets, but missing status.  Add status\n")
 			// store status
-		}
+			changes = append(changes, &Change{Type: ChangeTypeAddStatus, ID: localObject.ID})
 
+		}
 	}
 
+	// Iterate remote
 	for _, remoteObject := range remoteSet {
 		// Keep a note of this foundIDs to check against the status set
 		foundIDs = append(foundIDs, remoteObject.ID)
@@ -91,10 +94,10 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 	if err != nil {
 		return err
 	}
-	for _, status := range allStati {
+	for _, statusEntry := range allStati {
 		statusFound := false
 		for _, id := range foundIDs {
-			if status.ID == id {
+			if statusEntry.ID == id {
 				// Found this status in the list of relevant IDs.
 				// Jump to next
 				statusFound = true
@@ -106,7 +109,8 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 		}
 
 		// status - A - B
-		fmt.Printf("We should remove status [%s]\n", status.ID)
+		fmt.Printf("We should remove status [%s]\n", statusEntry.ID)
+		changes = append(changes, &Change{Type: ChangeTypeDeleteStatus, ID: statusEntry.ID})
 	}
 
 	/* Phase 2 - Reconcile changes */
@@ -139,6 +143,16 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 			}
 
 			fmt.Printf("Deleted: %v From: %s\n", change.Object.ID, change.Store.GetName())
+		case ChangeTypeDeleteStatus:
+			err = status.Delete(ctx, change.ID)
+			if err != nil {
+				return err
+			}
+		case ChangeTypeAddStatus:
+			err = status.Set(ctx, &SyncStatus{ID: change.Object.ID})
+			if err != nil {
+				return err
+			}
 		default:
 			fmt.Println("Currently unsupported change type")
 		}
