@@ -15,10 +15,14 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 		return err
 	}
 
+	fmt.Printf("local len: %v\n", len(localSet))
+
 	remoteSet, _, err := remote.GetAll(ctx)
 	if err != nil {
 		return err
 	}
+
+	fmt.Printf("remote len: %v\n", len(remoteSet))
 
 	foundIDs := []string{}
 

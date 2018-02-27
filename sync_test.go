@@ -103,56 +103,6 @@ func TestTree(t *testing.T) {
 		checkStore(ctx, store2, itemCount-decrement, nil, t)
 
 	})
-	// t.Run("ComplexSync", func(t *testing.T) {
-
-	// 	status := NewInMemoryStatusStorage()
-
-	// 	itemCount := 3
-
-	// 	// Create first item set
-	// 	store1 := NewInMemoryStorage("local")
-
-	// 	expectedStore1Objects := []*GenericObject{}
-	// 	expectedStore2Objects := []*GenericObject{}
-
-	// 	addedObjects, err := addObjectsToStore(ctx, store1, itemCount)
-	// 	if err != nil {
-	// 		t.Errorf("Error: %v", err)
-	// 	}
-	// 	expectedStore1Objects = append(expectedStore1Objects, addedObjects...)
-	// 	expectedStore2Objects = append(expectedStore2Objects, addedObjects...)
-
-	// 	fmt.Println("Run sync...")
-
-	// 	// sync items
-	// 	store2 := NewInMemoryStorage("remote")
-	// 	err = Sync(ctx, store1, store2, status)
-	// 	if err != nil {
-	// 		t.Errorf("Error: %v", err)
-	// 	}
-
-	// 	checkStore(ctx, store1, itemCount, expectedStore1Objects, t)
-	// 	checkStore(ctx, store2, itemCount, expectedStore2Objects, t)
-
-	// 	// Remove some items
-	// 	decrement := 2
-	// 	for i := 0; i < decrement; i++ {
-	// 		store2.Delete(ctx, addedObjects[i].ID)
-
-	// 	}
-	// 	checkStore(ctx, store2, itemCount-decrement, nil, t)
-
-	// 	fmt.Println("Run sync...")
-
-	// 	err = Sync(ctx, store1, store2, status)
-	// 	if err != nil {
-	// 		t.Errorf("Error: %v", err)
-	// 	}
-
-	// 	checkStore(ctx, store1, itemCount-decrement, nil, t)
-	// 	checkStore(ctx, store2, itemCount-decrement, nil, t)
-
-	// })
 	t.Run("DualAppend", func(t *testing.T) {
 
 		status := NewInMemoryStatusStorage()
@@ -208,7 +158,67 @@ func TestTree(t *testing.T) {
 		checkStore(ctx, store1, itemCount+increment+increment, expectedStore1Objects, t)
 		checkStore(ctx, store2, itemCount+increment+increment, expectedStore2Objects, t)
 	})
+	t.Run("ComplexSync", func(t *testing.T) {
 
+		status := NewInMemoryStatusStorage()
+
+		itemCount := 2
+
+		// Create first item set
+		store1 := NewInMemoryStorage("local")
+
+		expectedStore1Objects := []*GenericObject{}
+		expectedStore2Objects := []*GenericObject{}
+
+		addedObjects, err := addObjectsToStore(ctx, store1, itemCount)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+		expectedStore1Objects = append(expectedStore1Objects, addedObjects...)
+		expectedStore2Objects = append(expectedStore2Objects, addedObjects...)
+
+		fmt.Println("Run sync...")
+
+		// sync items
+		store2 := NewInMemoryStorage("remote")
+		err = Sync(ctx, store1, store2, status)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		checkStore(ctx, store1, itemCount, expectedStore1Objects, t)
+		checkStore(ctx, store2, itemCount, expectedStore2Objects, t)
+
+		increment := 1
+		addedObjectsStore1, err := addObjectsToStore(ctx, store1, increment)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+		expectedStore1Objects = append(expectedStore1Objects, addedObjectsStore1...)
+		expectedStore2Objects = append(expectedStore2Objects, addedObjectsStore1...)
+
+		checkStore(ctx, store1, len(expectedStore1Objects), expectedStore1Objects, t)
+
+		// // Remove some items
+		// decrement := 1
+		// for i := 0; i < decrement; i++ {
+		// 	store2.Delete(ctx, addedObjects[i].ID)
+		// 	//expectedStore1Objects = remove(expectedStore1Objects, addedObjects[i].ID)
+		// 	expectedStore2Objects = remove(expectedStore2Objects, addedObjects[i].ID)
+		// }
+		// checkStore(ctx, store2, len(expectedStore2Objects), expectedStore2Objects, t)
+
+		fmt.Println("Run sync...")
+
+		err = Sync(ctx, store1, store2, status)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		checkStore(ctx, store1, len(expectedStore1Objects), expectedStore1Objects, t)
+		checkStore(ctx, store2, len(expectedStore2Objects), expectedStore2Objects, t)
+
+	})
 }
 
 func checkStore(ctx context.Context, store Storage, expectedLen int, expectedObjects []*GenericObject, t *testing.T) {
@@ -264,4 +274,14 @@ func addObjectsToStore(ctx context.Context, store Storage, len int) ([]*GenericO
 		}
 	}
 	return addedObects, nil
+}
+
+func remove(s []*GenericObject, id string) []*GenericObject {
+	var r []*GenericObject
+	for _, o := range s {
+		if o.ID != id {
+			r = append(r, o)
+		}
+	}
+	return r
 }
