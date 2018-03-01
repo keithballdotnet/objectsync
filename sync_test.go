@@ -199,14 +199,13 @@ func TestTree(t *testing.T) {
 
 		checkStore(ctx, store1, len(expectedStore1Objects), expectedStore1Objects, t)
 
-		// // Remove some items
-		// decrement := 1
-		// for i := 0; i < decrement; i++ {
-		// 	store2.Delete(ctx, addedObjects[i].ID)
-		// 	//expectedStore1Objects = remove(expectedStore1Objects, addedObjects[i].ID)
-		// 	expectedStore2Objects = remove(expectedStore2Objects, addedObjects[i].ID)
-		// }
-		// checkStore(ctx, store2, len(expectedStore2Objects), expectedStore2Objects, t)
+		// Remove some items
+		decrement := 1
+		for i := 0; i < decrement; i++ {
+			store2.Delete(ctx, addedObjects[i].ID)
+			expectedStore1Objects = remove(expectedStore1Objects, addedObjects[i].ID)
+			expectedStore2Objects = remove(expectedStore2Objects, addedObjects[i].ID)
+		}
 
 		fmt.Println("Run sync...")
 
