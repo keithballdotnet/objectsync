@@ -1,7 +1,9 @@
 package objectsync
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 )
 
@@ -10,14 +12,14 @@ import (
 // Last Write Wins (LWW) conflict resolution
 func Sync(ctx context.Context, local, remote Storage, status StatusStorage) error {
 
-	localSet, _, err := local.GetAll(ctx)
+	localSet, err := local.GetAll(ctx)
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("local len: %v\n", len(localSet))
 
-	remoteSet, _, err := remote.GetAll(ctx)
+	remoteSet, err := remote.GetAll(ctx)
 	if err != nil {
 		return err
 	}
@@ -35,13 +37,13 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 		// Keep a note of this foundIDs to check against the status set
 		foundIDs = append(foundIDs, localObject.ID)
 
-		_, _, err = remote.Get(ctx, localObject.ID)
+		remoteObject, err := remote.Get(ctx, localObject.ID)
 		foundRemote, err := wasFound(err)
 		if err != nil {
 			return err
 		}
 
-		_, err = status.Get(ctx, localObject.ID)
+		syncStatus, err := status.Get(ctx, localObject.ID)
 		foundStatus, err := wasFound(err)
 		if err != nil {
 			return err
@@ -65,10 +67,38 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 
 		// A + B - status
 		if foundRemote && !foundStatus {
-			fmt.Printf("Found in both sets, but missing status.  Add status\n")
+			fmt.Printf("Found in both sets, but missing status.  Invoke conflict resolution\n")
+
+			// We should invoke conflict resolution as we dont know what to do with the object
+
 			// store status
 			changes = append(changes, &Change{Type: ChangeTypeAddStatus, ID: localObject.ID})
 
+		}
+
+		// A + B + Status
+		if foundRemote && foundStatus {
+			fmt.Printf("Found in both sets and status.  Check content...\n")
+			fmt.Printf("localhash: %s\n", base64.StdEncoding.EncodeToString(localObject.Hash))
+			fmt.Printf("localsynchash: %s\n", base64.StdEncoding.EncodeToString(syncStatus.Local))
+			fmt.Printf("remotehash: %s\n", base64.StdEncoding.EncodeToString(remoteObject.Hash))
+			fmt.Printf("remotesynchash: %s\n", base64.StdEncoding.EncodeToString(syncStatus.Remote))
+
+			// A-Hash != Status-Hash && B-Hash == Status-Hash
+			if !bytes.Equal(localObject.Hash, syncStatus.Local) && bytes.Equal(remoteObject.Hash, syncStatus.Remote) {
+				fmt.Printf("Hash has changed local but not on remote.  Update remote.\n")
+			}
+
+			// A-Hash == Status-Hash && B-Hash != Status-Hash
+			if bytes.Equal(localObject.Hash, syncStatus.Local) && !bytes.Equal(remoteObject.Hash, syncStatus.Remote) {
+				fmt.Printf("Hash has changed remote but not on local.  Update local.\n")
+			}
+
+			// A-Hash != Status-Hash && B-Hash != Status-Hash
+			if !bytes.Equal(localObject.Hash, syncStatus.Local) && !bytes.Equal(remoteObject.Hash, syncStatus.Remote) {
+				fmt.Printf("Hash has changed local, also changed remote.  Invoke conflict resolution.\n")
+
+			}
 		}
 	}
 
@@ -77,7 +107,7 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 		// Keep a note of this foundIDs to check against the status set
 		foundIDs = append(foundIDs, remoteObject.ID)
 
-		_, _, err = local.Get(ctx, remoteObject.ID)
+		_, err = local.Get(ctx, remoteObject.ID)
 		foundLocal, err := wasFound(err)
 		if err != nil {
 			return err
@@ -137,12 +167,13 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 		switch change.Type {
 		case ChangeTypeAdd:
 			// Add object to store
-			err = change.Store.Set(ctx, change.Object)
+			newobj := *change.Object // As we are dealing with go specific pointers, we will copy the value out
+			err = change.Store.Set(ctx, &newobj)
 			if err != nil {
 				return err
 			}
 			// Set status
-			err = status.Set(ctx, &SyncStatus{ID: change.Object.ID})
+			err = status.Set(ctx, &SyncStatus{ID: change.Object.ID, Local: change.Object.Hash, Remote: change.Object.Hash})
 			if err != nil {
 				return err
 			}
@@ -166,7 +197,7 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 				return err
 			}
 		case ChangeTypeAddStatus:
-			err = status.Set(ctx, &SyncStatus{ID: change.Object.ID})
+			err = status.Set(ctx, &SyncStatus{ID: change.Object.ID, Local: change.Object.Hash, Remote: change.Object.Hash})
 			if err != nil {
 				return err
 			}

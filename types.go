@@ -14,6 +14,7 @@ type GenericObjectCollection []*GenericObject
 // GenericObject ...
 type GenericObject struct {
 	ID       string
+	Hash     Hash
 	Modified time.Time
 	Value    string
 }

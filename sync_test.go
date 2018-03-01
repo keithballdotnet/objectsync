@@ -13,7 +13,62 @@ var _ Storage = &InMemoryStorage{}
 func TestTree(t *testing.T) {
 
 	ctx := context.TODO()
+	t.Run("SimpleUpdate", func(t *testing.T) {
 
+		status := NewInMemoryStatusStorage()
+
+		itemCount := 3
+		expectedStore1Objects := []*GenericObject{}
+		expectedStore2Objects := []*GenericObject{}
+
+		// Create first item set
+		store1 := NewInMemoryStorage("local")
+
+		addedObjects, err := addObjectsToStore(ctx, store1, itemCount)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		expectedStore1Objects = append(expectedStore1Objects, addedObjects...)
+		expectedStore2Objects = append(expectedStore2Objects, addedObjects...)
+
+		fmt.Println("Run sync...")
+
+		// sync items
+		store2 := NewInMemoryStorage("remote")
+		err = Sync(ctx, store1, store2, status)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		checkStore(ctx, store1, len(expectedStore1Objects), expectedStore1Objects, t)
+		checkStore(ctx, store2, len(expectedStore2Objects), expectedStore2Objects, t)
+
+		// Make sure nothing changes if we change nothing
+		err = Sync(ctx, store1, store2, status)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		checkStore(ctx, store1, len(expectedStore1Objects), expectedStore1Objects, t)
+		checkStore(ctx, store2, len(expectedStore2Objects), expectedStore2Objects, t)
+
+		firstObject := addedObjects[0]
+		firstObject.Value = "Consistency is the playground of dull minds."
+		firstObject.Modified = time.Now().UTC()
+
+		// update store 1
+		err = store1.Set(ctx, firstObject)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		err = Sync(ctx, store1, store2, status)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+	})
 	t.Run("SimpleAppend", func(t *testing.T) {
 
 		status := NewInMemoryStatusStorage()
@@ -221,7 +276,7 @@ func TestTree(t *testing.T) {
 }
 
 func checkStore(ctx context.Context, store Storage, expectedLen int, expectedObjects []*GenericObject, t *testing.T) {
-	allFromStore, _, err := store.GetAll(ctx)
+	allFromStore, err := store.GetAll(ctx)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
