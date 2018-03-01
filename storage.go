@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 )
 
 // Storage is a storage interface
@@ -55,7 +54,7 @@ func (s *InMemoryStorage) Set(ctx context.Context, object *GenericObject) error 
 func (s *InMemoryStorage) Get(ctx context.Context, id string) (*GenericObject, Hash, error) {
 	object, ok := s.idIndex[id]
 	if !ok {
-		return nil, nil, errors.New("not found")
+		return nil, nil, ErrorNotFound
 	}
 
 	return object, s.hashIndex[id], nil

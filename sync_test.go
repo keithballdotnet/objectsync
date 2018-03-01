@@ -162,7 +162,7 @@ func TestTree(t *testing.T) {
 
 		status := NewInMemoryStatusStorage()
 
-		itemCount := 2
+		itemCount := 5
 
 		// Create first item set
 		store1 := NewInMemoryStorage("local")
@@ -189,7 +189,7 @@ func TestTree(t *testing.T) {
 		checkStore(ctx, store1, itemCount, expectedStore1Objects, t)
 		checkStore(ctx, store2, itemCount, expectedStore2Objects, t)
 
-		increment := 1
+		increment := 3
 		addedObjectsStore1, err := addObjectsToStore(ctx, store1, increment)
 		if err != nil {
 			t.Errorf("Error: %v", err)
@@ -200,7 +200,7 @@ func TestTree(t *testing.T) {
 		checkStore(ctx, store1, len(expectedStore1Objects), expectedStore1Objects, t)
 
 		// Remove some items
-		decrement := 1
+		decrement := 2
 		for i := 0; i < decrement; i++ {
 			store2.Delete(ctx, addedObjects[i].ID)
 			expectedStore1Objects = remove(expectedStore1Objects, addedObjects[i].ID)

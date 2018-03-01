@@ -1,7 +1,7 @@
 package objectsync
 
 import (
-	"bytes"
+	"errors"
 	"time"
 )
 
@@ -45,36 +45,10 @@ type Change struct {
 	Store  Storage
 }
 
-// TreeObjectCollection is a collection of tree objects
-type TreeObjectCollection []*TreeObject
+// ErrorNotFound ...
+var ErrorNotFound = errors.New("not found")
 
-// TreeObject is a pairing of data and a hash
-type TreeObject struct {
-	ID   string
-	Hash Hash
+// IsNotFoundError ...
+func IsNotFoundError(err error) bool {
+	return err.Error() == ErrorNotFound.Error()
 }
-
-// GetHashes will return the hash slice of the TreeObjectCollection
-func (c TreeObjectCollection) GetHashes() [][]byte {
-	hashes := make([][]byte, len(c))
-	for i := 0; i < len(c); i++ {
-		hashes[i] = c[i].Hash
-	}
-	return hashes
-}
-
-// GetIDs will return the IDs of the TreeObjectCollection
-func (c TreeObjectCollection) GetIDs() [][]byte {
-	ids := make([][]byte, len(c))
-	for i := 0; i < len(c); i++ {
-		ids[i] = []byte(c[i].ID)
-	}
-	return ids
-}
-
-// treeObjectSorted will sort objects based on their Hash
-type treeObjectSorter []*TreeObject
-
-func (b treeObjectSorter) Len() int           { return len(b) }
-func (b treeObjectSorter) Less(i, j int) bool { return bytes.Compare(b[i].Hash, b[j].Hash) < 0 }
-func (b treeObjectSorter) Swap(i, j int)      { b[j], b[i] = b[i], b[j] }

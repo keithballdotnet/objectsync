@@ -36,10 +36,16 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 		foundIDs = append(foundIDs, localObject.ID)
 
 		_, _, err = remote.Get(ctx, localObject.ID)
-		foundRemote := wasFound(err)
+		foundRemote, err := wasFound(err)
+		if err != nil {
+			return err
+		}
 
 		_, err = status.Get(ctx, localObject.ID)
-		foundStatus := wasFound(err)
+		foundStatus, err := wasFound(err)
+		if err != nil {
+			return err
+		}
 
 		// A - B - status
 		if !foundRemote && !foundStatus {
@@ -72,9 +78,16 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 		foundIDs = append(foundIDs, remoteObject.ID)
 
 		_, _, err = local.Get(ctx, remoteObject.ID)
-		foundLocal := wasFound(err)
+		foundLocal, err := wasFound(err)
+		if err != nil {
+			return err
+		}
+
 		_, err = status.Get(ctx, remoteObject.ID)
-		foundStatus := wasFound(err)
+		foundStatus, err := wasFound(err)
+		if err != nil {
+			return err
+		}
 
 		// B - A - status
 		if !foundLocal && !foundStatus {
@@ -166,6 +179,10 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 	return nil
 }
 
-func wasFound(err error) bool {
-	return err == nil || err.Error() != "not found"
+func wasFound(err error) (bool, error) {
+	if err != nil && !IsNotFoundError(err) {
+		return false, err
+	}
+
+	return err == nil || !IsNotFoundError(err), nil
 }
