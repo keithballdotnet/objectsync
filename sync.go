@@ -54,7 +54,15 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 			fmt.Printf("We should add local [%s] to remote\n", localObject.ID)
 			// Add local -> Remote
 			// Store Status
-			changes = append(changes, &Change{Type: ChangeTypeAdd, Object: localObject, Store: remote})
+			changes = append(changes, &Change{
+				Type:   ChangeTypeAdd,
+				Object: localObject,
+				Store:  remote,
+				SyncStatus: &SyncStatus{
+					ID:         localObject.ID,
+					LocalHash:  localObject.Hash,
+					RemoteHash: localObject.Hash,
+				}})
 		}
 
 		// A + status - B
@@ -62,7 +70,11 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 			fmt.Printf("We should delete local [%s]\n", localObject.ID)
 			// Delete local
 			// Delete status
-			changes = append(changes, &Change{Type: ChangeTypeDelete, Object: localObject, Store: local})
+			changes = append(changes, &Change{
+				Type:   ChangeTypeDelete,
+				Object: localObject,
+				Store:  local,
+			})
 		}
 
 		// A + B - status
@@ -72,30 +84,54 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 			// We should invoke conflict resolution as we dont know what to do with the object
 
 			// store status
-			changes = append(changes, &Change{Type: ChangeTypeAddStatus, ID: localObject.ID})
-
+			changes = append(changes, &Change{
+				Type: ChangeTypeAddStatus,
+				ID:   localObject.ID,
+				SyncStatus: &SyncStatus{
+					ID:         localObject.ID,
+					LocalHash:  localObject.Hash,
+					RemoteHash: localObject.Hash,
+				}})
 		}
 
 		// A + B + Status
 		if foundRemote && foundStatus {
 			fmt.Printf("Found in both sets and status.  Check content...\n")
 			fmt.Printf("localhash: %s\n", base64.StdEncoding.EncodeToString(localObject.Hash))
-			fmt.Printf("localsynchash: %s\n", base64.StdEncoding.EncodeToString(syncStatus.Local))
+			fmt.Printf("localsynchash: %s\n", base64.StdEncoding.EncodeToString(syncStatus.LocalHash))
 			fmt.Printf("remotehash: %s\n", base64.StdEncoding.EncodeToString(remoteObject.Hash))
-			fmt.Printf("remotesynchash: %s\n", base64.StdEncoding.EncodeToString(syncStatus.Remote))
+			fmt.Printf("remotesynchash: %s\n", base64.StdEncoding.EncodeToString(syncStatus.RemoteHash))
 
 			// A-Hash != Status-Hash && B-Hash == Status-Hash
-			if !bytes.Equal(localObject.Hash, syncStatus.Local) && bytes.Equal(remoteObject.Hash, syncStatus.Remote) {
+			if !bytes.Equal(localObject.Hash, syncStatus.LocalHash) && bytes.Equal(remoteObject.Hash, syncStatus.RemoteHash) {
 				fmt.Printf("Hash has changed local but not on remote.  Update remote.\n")
+				changes = append(changes, &Change{
+					Type:   ChangeTypeAdd,
+					Object: localObject,
+					Store:  remote,
+					SyncStatus: &SyncStatus{
+						ID:         localObject.ID,
+						LocalHash:  localObject.Hash,
+						RemoteHash: localObject.Hash,
+					}})
 			}
 
 			// A-Hash == Status-Hash && B-Hash != Status-Hash
-			if bytes.Equal(localObject.Hash, syncStatus.Local) && !bytes.Equal(remoteObject.Hash, syncStatus.Remote) {
+			if bytes.Equal(localObject.Hash, syncStatus.LocalHash) && !bytes.Equal(remoteObject.Hash, syncStatus.RemoteHash) {
 				fmt.Printf("Hash has changed remote but not on local.  Update local.\n")
+				changes = append(changes, &Change{
+					Type:   ChangeTypeAdd,
+					Object: remoteObject,
+					Store:  local,
+					SyncStatus: &SyncStatus{
+						ID:         remoteObject.ID,
+						LocalHash:  remoteObject.Hash,
+						RemoteHash: remoteObject.Hash,
+					}})
 			}
 
 			// A-Hash != Status-Hash && B-Hash != Status-Hash
-			if !bytes.Equal(localObject.Hash, syncStatus.Local) && !bytes.Equal(remoteObject.Hash, syncStatus.Remote) {
+			if !bytes.Equal(localObject.Hash, syncStatus.LocalHash) && !bytes.Equal(remoteObject.Hash, syncStatus.RemoteHash) {
 				fmt.Printf("Hash has changed local, also changed remote.  Invoke conflict resolution.\n")
 
 			}
@@ -124,7 +160,15 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 			fmt.Printf("We should add remote [%s] to local\n", remoteObject.ID)
 			// Add remote -> local
 			// store status
-			changes = append(changes, &Change{Type: ChangeTypeAdd, Object: remoteObject, Store: local})
+			changes = append(changes, &Change{
+				Type:   ChangeTypeAdd,
+				Object: remoteObject,
+				Store:  local,
+				SyncStatus: &SyncStatus{
+					ID:         remoteObject.ID,
+					LocalHash:  remoteObject.Hash,
+					RemoteHash: remoteObject.Hash,
+				}})
 		}
 
 		// B + status - A
@@ -173,7 +217,7 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 				return err
 			}
 			// Set status
-			err = status.Set(ctx, &SyncStatus{ID: change.Object.ID, Local: change.Object.Hash, Remote: change.Object.Hash})
+			err = status.Set(ctx, change.SyncStatus)
 			if err != nil {
 				return err
 			}
@@ -197,7 +241,7 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 				return err
 			}
 		case ChangeTypeAddStatus:
-			err = status.Set(ctx, &SyncStatus{ID: change.Object.ID, Local: change.Object.Hash, Remote: change.Object.Hash})
+			err = status.Set(ctx, change.SyncStatus)
 			if err != nil {
 				return err
 			}

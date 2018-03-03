@@ -21,9 +21,9 @@ type GenericObject struct {
 
 // SyncStatus is a status of the last sync for items
 type SyncStatus struct {
-	ID     string
-	Local  Hash
-	Remote Hash
+	ID         string
+	LocalHash  Hash
+	RemoteHash Hash
 }
 
 // ChangeType represents what change should be performed
@@ -40,10 +40,11 @@ const (
 
 // Change is a change
 type Change struct {
-	Type   ChangeType
-	ID     string
-	Object *GenericObject
-	Store  Storage
+	Type       ChangeType
+	ID         string
+	Object     *GenericObject
+	Store      Storage
+	SyncStatus *SyncStatus
 }
 
 // ErrorNotFound ...
