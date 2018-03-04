@@ -31,11 +31,10 @@ type ChangeType string
 
 // Types of changes that can be done during a sync
 const (
-	ChangeTypeAdd          ChangeType = "add"
+	ChangeTypeSet          ChangeType = "set"
 	ChangeTypeDelete       ChangeType = "delete"
-	ChangeTypeUpdate       ChangeType = "update"
 	ChangeTypeDeleteStatus ChangeType = "delete_status"
-	ChangeTypeAddStatus    ChangeType = "add_status"
+	ChangeTypeSetStatus    ChangeType = "set_status"
 )
 
 // Change is a change

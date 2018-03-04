@@ -54,7 +54,7 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 			// Add local -> Remote
 			// Store Status
 			changes = append(changes, &Change{
-				Type:   ChangeTypeAdd,
+				Type:   ChangeTypeSet,
 				Object: localObject,
 				Store:  remote,
 				SyncStatus: &SyncStatus{
@@ -106,7 +106,7 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 			if !bytes.Equal(localObject.Hash, syncStatus.LocalHash) && bytes.Equal(remoteObject.Hash, syncStatus.RemoteHash) {
 				fmt.Printf("Hash has changed local but not on remote.  Update remote.\n")
 				changes = append(changes, &Change{
-					Type:   ChangeTypeAdd,
+					Type:   ChangeTypeSet,
 					Object: localObject,
 					Store:  remote,
 					SyncStatus: &SyncStatus{
@@ -120,7 +120,7 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 			if bytes.Equal(localObject.Hash, syncStatus.LocalHash) && !bytes.Equal(remoteObject.Hash, syncStatus.RemoteHash) {
 				fmt.Printf("Hash has changed remote but not on local.  Update local.\n")
 				changes = append(changes, &Change{
-					Type:   ChangeTypeAdd,
+					Type:   ChangeTypeSet,
 					Object: remoteObject,
 					Store:  local,
 					SyncStatus: &SyncStatus{
@@ -161,7 +161,7 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 			// Add remote -> local
 			// store status
 			changes = append(changes, &Change{
-				Type:   ChangeTypeAdd,
+				Type:   ChangeTypeSet,
 				Object: remoteObject,
 				Store:  local,
 				SyncStatus: &SyncStatus{
@@ -209,7 +209,7 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 		fmt.Printf("Got change: %v\n", change.Type)
 
 		switch change.Type {
-		case ChangeTypeAdd:
+		case ChangeTypeSet:
 			// Add object to store
 			newobj := *change.Object // As we are dealing with go specific pointers, we will copy the value out
 			err = change.Store.Set(ctx, &newobj)
@@ -240,7 +240,7 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 			if err != nil {
 				return err
 			}
-		case ChangeTypeAddStatus:
+		case ChangeTypeSetStatus:
 			err = status.Set(ctx, change.SyncStatus)
 			if err != nil {
 				return err
@@ -262,7 +262,7 @@ func resolveConflict(ctx context.Context, localObject, remoteObject *GenericObje
 	if localObject.Modified.After(remoteObject.Modified) {
 		fmt.Printf("We should add local [%s] to remote\n", remoteObject.ID)
 		return &Change{
-			Type:   ChangeTypeAdd,
+			Type:   ChangeTypeSet,
 			Object: localObject,
 			Store:  remote,
 			SyncStatus: &SyncStatus{
@@ -271,10 +271,10 @@ func resolveConflict(ctx context.Context, localObject, remoteObject *GenericObje
 				RemoteHash: localObject.Hash,
 			}}
 	}
-	fmt.Printf("We should add remote [%s] to local\n", remoteObject.ID)
 	// remote object is older than local object.  Preserve older object.
+	fmt.Printf("We should add remote [%s] to local\n", remoteObject.ID)
 	return &Change{
-		Type:   ChangeTypeAdd,
+		Type:   ChangeTypeSet,
 		Object: remoteObject,
 		Store:  local,
 		SyncStatus: &SyncStatus{
@@ -282,7 +282,6 @@ func resolveConflict(ctx context.Context, localObject, remoteObject *GenericObje
 			LocalHash:  remoteObject.Hash,
 			RemoteHash: remoteObject.Hash,
 		}}
-
 }
 
 func wasFound(err error) (bool, error) {
