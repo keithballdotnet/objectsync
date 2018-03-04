@@ -1,7 +1,9 @@
 package objectsync
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"testing"
 	"time"
@@ -13,6 +15,73 @@ var _ Storage = &InMemoryStorage{}
 func TestTree(t *testing.T) {
 
 	ctx := context.TODO()
+	t.Run("ConflictResolution", func(t *testing.T) {
+
+		status := NewInMemoryStatusStorage()
+
+		itemCount := 3
+		expectedStore1Objects := []*GenericObject{}
+		expectedStore2Objects := []*GenericObject{}
+
+		// Create first item set
+		store1 := NewInMemoryStorage("local")
+
+		addedObjects, err := addObjectsToStore(ctx, store1, itemCount)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		expectedStore1Objects = append(expectedStore1Objects, addedObjects...)
+		expectedStore2Objects = append(expectedStore2Objects, addedObjects...)
+
+		fmt.Println("Run sync...")
+
+		// sync items
+		store2 := NewInMemoryStorage("remote")
+		err = Sync(ctx, store1, store2, status)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		checkStore(ctx, store1, len(expectedStore1Objects), expectedStore1Objects, t)
+		checkStore(ctx, store2, len(expectedStore2Objects), expectedStore2Objects, t)
+
+		// Make sure nothing changes if we change nothing
+		err = Sync(ctx, store1, store2, status)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		checkStore(ctx, store1, len(expectedStore1Objects), expectedStore1Objects, t)
+		checkStore(ctx, store2, len(expectedStore2Objects), expectedStore2Objects, t)
+
+		localObject := addedObjects[0]
+		localObject.Value = "Consistency is the playground of dull minds."
+		localObject.Modified = time.Now().UTC()
+
+		// update store 1
+		err = store1.Set(ctx, localObject)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		remoteObject := &(*localObject)
+		remoteObject.Value = "Consistency is the playground of dull minds."
+		remoteObject.Modified = time.Now().UTC()
+
+		// update store 2
+		err = store2.Set(ctx, remoteObject)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		// Make sure nothing changes if we change nothing
+		err = Sync(ctx, store1, store2, status)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+	})
 	t.Run("SimpleUpdate", func(t *testing.T) {
 
 		status := NewInMemoryStatusStorage()
@@ -67,6 +136,43 @@ func TestTree(t *testing.T) {
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
+
+		checkStore(ctx, store1, len(expectedStore1Objects), expectedStore1Objects, t)
+		checkStore(ctx, store2, len(expectedStore2Objects), expectedStore2Objects, t)
+
+		addedObjectsStore2, err := addObjectsToStore(ctx, store2, 2)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		expectedStore1Objects = append(expectedStore1Objects, addedObjectsStore2...)
+		expectedStore2Objects = append(expectedStore2Objects, addedObjectsStore2...)
+
+		err = Sync(ctx, store1, store2, status)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		checkStore(ctx, store1, len(expectedStore1Objects), expectedStore1Objects, t)
+		checkStore(ctx, store2, len(expectedStore2Objects), expectedStore2Objects, t)
+
+		remoteChange := addedObjectsStore2[0]
+		remoteChange.Value = "What one programmer can do in one month, two programmers can do in two months."
+		remoteChange.Modified = time.Now().UTC()
+
+		// update store 1
+		err = store2.Set(ctx, remoteChange)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		err = Sync(ctx, store1, store2, status)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		checkStore(ctx, store1, len(expectedStore1Objects), expectedStore1Objects, t)
+		checkStore(ctx, store2, len(expectedStore2Objects), expectedStore2Objects, t)
 
 	})
 	t.Run("SimpleAppend", func(t *testing.T) {
@@ -290,6 +396,10 @@ func checkStore(ctx context.Context, store Storage, expectedLen int, expectedObj
 			for _, foundObject := range allFromStore {
 				if expectedObject.ID == foundObject.ID {
 					found = true
+					if !bytes.Equal(expectedObject.Hash, foundObject.Hash) {
+						t.Fatalf("Found id = %s in %s, but hash does not match: %s : %s", expectedObject.ID, store.GetName(), base64.StdEncoding.EncodeToString(expectedObject.Hash), base64.StdEncoding.EncodeToString(foundObject.Hash))
+					}
+					continue
 				}
 			}
 			if !found {

@@ -3,7 +3,6 @@ package objectsync
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
 )
 
@@ -82,25 +81,26 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 			fmt.Printf("Found in both sets, but missing status.  Invoke conflict resolution\n")
 
 			// We should invoke conflict resolution as we dont know what to do with the object
+			changes = append(changes, resolveConflict(ctx, localObject, remoteObject, local, remote))
 
-			// store status
-			changes = append(changes, &Change{
-				Type: ChangeTypeAddStatus,
-				ID:   localObject.ID,
-				SyncStatus: &SyncStatus{
-					ID:         localObject.ID,
-					LocalHash:  localObject.Hash,
-					RemoteHash: localObject.Hash,
-				}})
+			// // store status
+			// changes = append(changes, &Change{
+			// 	Type: ChangeTypeAddStatus,
+			// 	ID:   localObject.ID,
+			// 	SyncStatus: &SyncStatus{
+			// 		ID:         localObject.ID,
+			// 		LocalHash:  localObject.Hash,
+			// 		RemoteHash: localObject.Hash,
+			// 	}})
 		}
 
 		// A + B + Status
 		if foundRemote && foundStatus {
 			fmt.Printf("Found in both sets and status.  Check content...\n")
-			fmt.Printf("localhash: %s\n", base64.StdEncoding.EncodeToString(localObject.Hash))
-			fmt.Printf("localsynchash: %s\n", base64.StdEncoding.EncodeToString(syncStatus.LocalHash))
-			fmt.Printf("remotehash: %s\n", base64.StdEncoding.EncodeToString(remoteObject.Hash))
-			fmt.Printf("remotesynchash: %s\n", base64.StdEncoding.EncodeToString(syncStatus.RemoteHash))
+			// fmt.Printf("localhash: %s\n", base64.StdEncoding.EncodeToString(localObject.Hash))
+			// fmt.Printf("localsynchash: %s\n", base64.StdEncoding.EncodeToString(syncStatus.LocalHash))
+			// fmt.Printf("remotehash: %s\n", base64.StdEncoding.EncodeToString(remoteObject.Hash))
+			// fmt.Printf("remotesynchash: %s\n", base64.StdEncoding.EncodeToString(syncStatus.RemoteHash))
 
 			// A-Hash != Status-Hash && B-Hash == Status-Hash
 			if !bytes.Equal(localObject.Hash, syncStatus.LocalHash) && bytes.Equal(remoteObject.Hash, syncStatus.RemoteHash) {
@@ -133,7 +133,7 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 			// A-Hash != Status-Hash && B-Hash != Status-Hash
 			if !bytes.Equal(localObject.Hash, syncStatus.LocalHash) && !bytes.Equal(remoteObject.Hash, syncStatus.RemoteHash) {
 				fmt.Printf("Hash has changed local, also changed remote.  Invoke conflict resolution.\n")
-
+				changes = append(changes, resolveConflict(ctx, localObject, remoteObject, local, remote))
 			}
 		}
 	}
@@ -252,6 +252,35 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 	}
 
 	return nil
+}
+
+// resolveConflict will return the object that should be considered
+// the object state to preserve
+// Last Write Wins (LWW) conflict resolution
+func resolveConflict(ctx context.Context, localObject, remoteObject *GenericObject, local, remote Storage) *Change {
+	// local object is older than remote object.  We preserve this object
+	if localObject.Modified.After(remoteObject.Modified) {
+		return &Change{
+			Type:   ChangeTypeAdd,
+			Object: localObject,
+			Store:  remote,
+			SyncStatus: &SyncStatus{
+				ID:         localObject.ID,
+				LocalHash:  localObject.Hash,
+				RemoteHash: localObject.Hash,
+			}}
+	}
+	// remote object is older than local object.  Preserve older object.
+	return &Change{
+		Type:   ChangeTypeAdd,
+		Object: remoteObject,
+		Store:  local,
+		SyncStatus: &SyncStatus{
+			ID:         remoteObject.ID,
+			LocalHash:  remoteObject.Hash,
+			RemoteHash: remoteObject.Hash,
+		}}
+
 }
 
 func wasFound(err error) (bool, error) {
