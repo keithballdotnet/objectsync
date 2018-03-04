@@ -66,7 +66,7 @@ func TestTree(t *testing.T) {
 		}
 
 		remoteObject := &(*localObject)
-		remoteObject.Value = "Consistency is the playground of dull minds."
+		remoteObject.Value = "NewValue"
 		remoteObject.Modified = time.Now().UTC()
 
 		// update store 2
@@ -79,6 +79,66 @@ func TestTree(t *testing.T) {
 		err = Sync(ctx, store1, store2, status)
 		if err != nil {
 			t.Errorf("Error: %v", err)
+		}
+
+		// Check that local has the right value
+		checkObject1, err := store1.Get(ctx, localObject.ID)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+		if checkObject1.Value != remoteObject.Value {
+			t.Fatalf("Unexpected value = %s expected %s", checkObject1.Value, remoteObject.Value)
+		}
+
+		// Newer object in local store, should beat remote change...
+
+		newRemoteObject := &GenericObject{
+			ID:       localObject.ID,
+			Value:    "NewValueAgain",
+			Modified: time.Now().UTC(),
+		}
+
+		// update store 2
+		err = store2.Set(ctx, newRemoteObject)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		// Update the local store again and sync again.
+		newLocalObject := &GenericObject{
+			ID:       localObject.ID,
+			Value:    "Consistency is the playground of dull minds.",
+			Modified: time.Now().UTC(),
+		}
+
+		// update store 1
+		err = store1.Set(ctx, newLocalObject)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		// Make sure nothing changes if we change nothing
+		err = Sync(ctx, store1, store2, status)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+
+		// Check that local has the right value
+		checkObject1, err = store1.Get(ctx, newLocalObject.ID)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+		if checkObject1.Value != newLocalObject.Value {
+			t.Fatalf("Unexpected value = %s expected %s", checkObject1.Value, newLocalObject.Value)
+		}
+
+		// Check that remote has the right value
+		checkObject2, err := store2.Get(ctx, newLocalObject.ID)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+		if checkObject2.Value != newLocalObject.Value {
+			t.Fatalf("Unexpected value = %s expected %s", checkObject2.Value, newLocalObject.Value)
 		}
 
 	})

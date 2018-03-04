@@ -260,6 +260,7 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 func resolveConflict(ctx context.Context, localObject, remoteObject *GenericObject, local, remote Storage) *Change {
 	// local object is older than remote object.  We preserve this object
 	if localObject.Modified.After(remoteObject.Modified) {
+		fmt.Printf("We should add local [%s] to remote\n", remoteObject.ID)
 		return &Change{
 			Type:   ChangeTypeAdd,
 			Object: localObject,
@@ -270,6 +271,7 @@ func resolveConflict(ctx context.Context, localObject, remoteObject *GenericObje
 				RemoteHash: localObject.Hash,
 			}}
 	}
+	fmt.Printf("We should add remote [%s] to local\n", remoteObject.ID)
 	// remote object is older than local object.  Preserve older object.
 	return &Change{
 		Type:   ChangeTypeAdd,
