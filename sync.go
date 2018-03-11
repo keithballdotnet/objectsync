@@ -82,16 +82,6 @@ func Sync(ctx context.Context, local, remote Storage, status StatusStorage) erro
 
 			// We should invoke conflict resolution as we dont know what to do with the object
 			changes = append(changes, resolveConflict(ctx, localObject, remoteObject, local, remote))
-
-			// // store status
-			// changes = append(changes, &Change{
-			// 	Type: ChangeTypeAddStatus,
-			// 	ID:   localObject.ID,
-			// 	SyncStatus: &SyncStatus{
-			// 		ID:         localObject.ID,
-			// 		LocalHash:  localObject.Hash,
-			// 		RemoteHash: localObject.Hash,
-			// 	}})
 		}
 
 		// A + B + Status
